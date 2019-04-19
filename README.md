@@ -1,5 +1,6 @@
 # TableVanilla
 Work with table without dependencies 
+Supports Ajax pajination and deeplinking
 
 # Examples
 
