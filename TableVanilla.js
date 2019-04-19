@@ -78,29 +78,24 @@ export default class TableVanilla {
         thead.addEventListener('click', e => {
             e.preventDefault();
             document.getElementsByClassName(this.dataset.order)[0].classList.remove(this.dataset.order);
-            e.target.hash ? this.handleSorting(e.target.hash.split('-')[1]) : false;
+            this.handleSorting(e.target.hash.split('-')[1]);
             e.target.classList.add(this.dataset.order);
         });
         controls.addEventListener('change', e => this.setPageSize(e.target.value));
         this.pagination.addEventListener('click', e => {
             e.preventDefault();
-            e.target.hash ? this.handlePagination(e.target.hash.split('-')[1]) : false;
+            this.handlePagination(e.target.hash.split('-')[1]);
         });
 
-        table.append(thead);
-        table.append(this.tbody);
-        container.append(table);
-        container.append(this.metaData);
-        container.append(controls);
-        container.append(this.pagination);
+        table.append(thead, this.tbody);
+        container.append(table, this.metaData, controls, this.pagination);
 
         this.renderPage();
     }
 
-    renderMeta() {
-        let lower = (this.dataset.page - 1) * this.dataset.limit + 1,
-            upper = lower - 1 + parseInt(this.dataset.limit);
-        this.metaData.innerText = `Showing ${lower} to ${upper > this.total ? this.total : upper} of ${this.total} rows`;
+    renderMeta(lower, pageSize, rowsCount) {
+        let upper = lower - 1 + pageSize;
+        this.metaData.innerText = `Showing ${lower} to ${upper > rowsCount ? rowsCount : upper} of ${rowsCount} rows`;
     }
 
     renderPagination(page = 1, pagesCount) {
@@ -128,7 +123,7 @@ export default class TableVanilla {
         this.renderPage();
     }
 
-    setPageSize(size = 10) {
+    setPageSize(size) {
         this.dataset.limit = size;
         this.dataset.page = 1;
         this.renderPage();
@@ -138,32 +133,31 @@ export default class TableVanilla {
         if (this.controller) {
             this.controller.abort();
         }
+        let offset = (this.dataset.page - 1) * this.dataset.limit;
 
-        let data = await this.getData(this.dataset);
-        if (!data) {
-            return;
+        let data = await this.getData({...this.dataset, offset: offset});
+        if (data) {
+            this.tbody.innerHTML = Object.values(data.rows).map(row =>
+                `<tr>
+                    ${Object.keys(this.headers).map(el =>
+                        `<td class="${row[el]}" title="${row[el]}">${row[el]}</td>`
+                    ).join('')}
+                    ${this.options.customFields.map(el =>
+                        `<td class="${el.name}">${el.callback(row)}</td>`
+                    ).join('')}
+                </tr>`
+            ).join('');
+
+            this.renderMeta(offset, +this.dataset.limit, +data.total);
+            this.renderPagination(+this.dataset.page, Math.ceil(data.total/this.dataset.limit));
+            if (this.options.deepLinking === "on") {
+                location.hash = Object.entries(this.dataset).map(el => el.join('=')).join('&');
+            }
         }
-        this.total = data.total;
-
-        this.tbody.innerHTML = Object.values(data.rows).map(row =>
-            `<tr>
-                ${Object.keys(this.headers).map(el =>
-                    `<td class="${row[el]}" title="${row[el]}">${row[el]}</td>`
-                ).join('')}
-                ${this.options.customFields.map(el =>
-                    `<td class="${el.name}">${el.callback(row)}</td>`
-                ).join('')}
-            </tr>`
-        ).join('');
-
-        this.renderMeta();
-        this.renderPagination(+this.dataset.page, Math.ceil(this.total/this.dataset.limit));
-        location.hash = Object.entries(this.dataset).map(el => el.join('=')).join('&');
     }
 
     async getData(params) {
         Object.entries(params).map(el => this.url.searchParams.set(...el));
-        this.url.searchParams.set('offset', (params.page - 1) * params.limit);
         try {
             this.controller = new AbortController();
             let response = await fetch(this.url, {signal: this.controller.signal});
@@ -177,28 +171,14 @@ export default class TableVanilla {
 const range = (size, startAt = 0) => [...Array(size).keys()].map(i => i+startAt);
 
 function getPages(current, last, paginSize = 5) {
-    let startAt = current - Math.floor(paginSize/2);
-    let list = range(paginSize, startAt);
-
-    if (list[paginSize-1] > last) {
-        list = list.slice(0, last - list[paginSize-1]);
-    } else if (list[0] < 1) {
-        list = list.slice(Math.abs(list[0]) + 1)
+    let list = Array.from(new Set(
+        [1, ...range(paginSize, current - Math.floor(paginSize/2)).filter(i => i>0 && i<=last), last]
+    ));
+    if (list[0]+1 !== list[1]) {
+        list.splice(1, 0, '...');
     }
-
-    if (!list.includes(last)) {
-        if (list[paginSize - 1] + 1 !== last) {
-            list.push('...');
-        }
-        list.push(last);
+    if (list[list.length-2]+1 !== list[list.length-1]) {
+        list.splice(-1, 0, '...');
     }
-
-    if (!list.includes(1)) {
-        if (list[0] - 1 !== 1) {
-            list.unshift('...');
-        }
-        list.unshift(1);
-    }
-
     return list;
 }
