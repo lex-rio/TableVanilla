@@ -13,7 +13,7 @@ Work with table without dependencies
      data-sort-order="desc"></div>
 ```
 
-## output
+## header render
 ```HTML
 <thead>
      <tr>
@@ -39,6 +39,7 @@ Work with table without dependencies
 </thead>
 ```
 
+## JS
 ```JS
 import TableVanilla from './TableVanilla.js';
 
