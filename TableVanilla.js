@@ -78,13 +78,13 @@ export default class TableVanilla {
         thead.addEventListener('click', e => {
             e.preventDefault();
             document.getElementsByClassName(this.dataset.order)[0].classList.remove(this.dataset.order);
-            this.handleSorting(e.target.hash.split('-')[1]);
+            e.target.hash ? this.handleSorting(e.target.hash.split('-')[1]) : false;
             e.target.classList.add(this.dataset.order);
         });
         controls.addEventListener('change', e => this.setPageSize(e.target.value));
         this.pagination.addEventListener('click', e => {
             e.preventDefault();
-            this.handlePagination(e.target.hash.split('-')[1]);
+            e.target.hash ? this.handlePagination(e.target.hash.split('-')[1]) : false;
         });
 
         table.append(thead, this.tbody);
@@ -99,14 +99,14 @@ export default class TableVanilla {
     }
 
     renderPagination(page = 1, pagesCount) {
-        let leftArrow = `<li><a href="#page-${page === 1 ? pagesCount : page-1}">‹</a></li>`;
-        let rightArrow = `<li><a href="#page-${page === pagesCount ? 1 : page+1}">›</a></li>`;
-
-        this.pagination.innerHTML = leftArrow + getPages(page, pagesCount).map(item =>
-            `<li class="${page === item ? 'active' : ''} ${item === '...' ? 'disabled' : ''}">
-                <a href="#page-${item}">${item}</a>
-            </li>`
-        ).join('') + rightArrow;
+        this.pagination.innerHTML =
+            `<li><a href="#page-${page === 1 ? pagesCount : page-1}">‹</a></li>`
+            + getPages(page, pagesCount).map(item =>
+                item === '...'
+                    ? `<li class="disabled"><a>...</a></li>`
+                    : `<li class="${page === item ? 'active' : ''}"><a href="#page-${item}">${item}</a></li>`
+            ).join('')
+            + `<li><a href="#page-${page === pagesCount ? 1 : page+1}">›</a></li>`;
     }
 
     handlePagination(page) {
@@ -133,6 +133,7 @@ export default class TableVanilla {
         if (this.controller) {
             this.controller.abort();
         }
+        this.dataset.page = parseInt(this.dataset.page) || 1;
         let offset = (this.dataset.page - 1) * this.dataset.limit;
 
         let data = await this.getData({...this.dataset, offset});
