@@ -102,11 +102,11 @@ export default class TableVanilla {
         let leftArrow = `<li><a href="#page-${page === 1 ? pagesCount : page-1}">‹</a></li>`;
         let rightArrow = `<li><a href="#page-${page === pagesCount ? 1 : page+1}">›</a></li>`;
 
-        this.pagination.innerHTML = leftArrow + getPages(page, pagesCount).map(item => item === '...'
-            ? `<li class="disabled"><a>...</a></li>`
-            : `<li class="${page === item ? 'active' : ''}">
+        this.pagination.innerHTML = leftArrow + getPages(page, pagesCount).map(item =>
+            `<li class="${page === item ? 'active' : ''} ${item === '...' ? 'disabled' : ''}">
                 <a href="#page-${item}">${item}</a>
-            </li>`).join('') + rightArrow;
+            </li>`
+        ).join('') + rightArrow;
     }
 
     handlePagination(page) {
@@ -135,7 +135,7 @@ export default class TableVanilla {
         }
         let offset = (this.dataset.page - 1) * this.dataset.limit;
 
-        let data = await this.getData({...this.dataset, offset: offset});
+        let data = await this.getData({...this.dataset, offset});
         if (data) {
             this.tbody.innerHTML = Object.values(data.rows).map(row =>
                 `<tr>
