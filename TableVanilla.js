@@ -94,8 +94,8 @@ export default class TableVanilla {
     }
 
     renderMeta(lower, pageSize, rowsCount) {
-        let upper = lower - 1 + pageSize;
-        this.metaData.innerText = `Showing ${lower} to ${upper > rowsCount ? rowsCount : upper} of ${rowsCount} rows`;
+        let upper = lower + pageSize;
+        this.metaData.innerText = `Showing ${++lower} to ${upper > rowsCount ? rowsCount : upper} of ${rowsCount} rows`;
     }
 
     renderPagination(page = 1, pagesCount) {
