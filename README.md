@@ -10,6 +10,7 @@ Supports Ajax pajination and deeplinking
      data-columns="id=#,col1=colName,col_name,col3,col4=last update"
      data-page-size="10"
      data-page-list="[5, 10, 25, 100]"
+     data-deep-linking="on"
      data-sort-name="id"
      data-sort-order="desc"></div>
 ```
