@@ -12,61 +12,55 @@ export default class TableVanilla {
             throw "invalid container provided";
         }
 
-        this.options = Object.assign({}, container.dataset, options);
-        this.url = new URL(this.options.url, location.origin);
+        this.options = {
+            pageList: "[10,25,50,100]",
+            pageSize: 10,
+            deepLinking: "on",
+            url: "/",
+            sortOrder: "asc",
+            sortName: "id",
+            ...container.dataset,
+            ...options
+        };
 
+        this.url = new URL(this.options.url, location.origin);
         this.dataset = {
             page: 1,
-            sort: container.dataset.sortName,
-            order: container.dataset.sortOrder,
-            limit: +container.dataset.pageSize
+            sort: this.options.sortName,
+            order: this.options.sortOrder,
+            limit: +this.options.pageSize
         };
 
         if (location.hash) {
-            this.dataset = Object.assign(
-                this.dataset,
-                Object.fromEntries(
-                    location.hash
-                        .split('#')[1]
+            this.dataset = {
+                ...this.dataset,
+                ...Object.fromEntries(
+                    location.hash.split('#')[1]
                         .split('&')
                         .map(el => el.split('='))
                 )
-            );
+            };
         }
         this.render(container);
     }
 
     async render(container) {
-        this.headers = Object.assign(
-            ...this.options.columns
-                .split(',')
-                .map(col => {
-                    let name = col.split('=');
-                    return {[name[0]]:  name[1] || name[0].replace('_', ' ')}
-                })
-        );
+        let table = document.createElement('table'),
+            controls = document.createElement('span');
 
-        let table = document.createElement('table');
-        let thead = document.createElement('thead');
-        let controls = document.createElement('span');
+        this.thead = document.createElement('thead');
         this.tbody = document.createElement('tbody');
         this.metaData = document.createElement('span');
         this.pagination = document.createElement('ul');
+
         table.classList.add('stripped');
         controls.classList.add('meta');
         this.metaData.classList.add('meta');
         this.pagination.classList.add('pagination');
 
-        thead.innerHTML = `<tr>
-            ${Object.entries(this.headers)
-                .map(([column, label]) =>
-                    `<th><a class="both ${column === this.dataset.sort ? this.dataset.order : ''}" href="#sort-${column}">
-                        ${label}
-                    </a></th>`
-                )
-                .concat(this.options.customFields.map(({name}) => `<th><div>${name}</div></th>`))
-                .join('')}
-        </tr>`;
+        if (this.options.columns) {
+            this.renderHeader(this.options.columns.split(',').map(col => col.split('=')));
+        }
 
         controls.innerHTML = `<select>
             ${JSON.parse(this.options.pageList).map(el =>
@@ -74,23 +68,49 @@ export default class TableVanilla {
             ).join('')}
         </select> rows per page`;
 
-
-        thead.addEventListener('click', e => {
-            e.preventDefault();
-            document.getElementsByClassName(this.dataset.order)[0].classList.remove(this.dataset.order);
-            e.target.hash ? this.handleSorting(e.target.hash.split('-')[1]) : false;
-            e.target.classList.add(this.dataset.order);
-        });
-        controls.addEventListener('change', e => this.setPageSize(e.target.value));
-        this.pagination.addEventListener('click', e => {
-            e.preventDefault();
-            e.target.hash ? this.handlePagination(e.target.hash.split('-')[1]) : false;
-        });
-
-        table.append(thead, this.tbody);
+        this.addHandlers(this.thead, controls, this.pagination);
+        table.append(this.thead, this.tbody);
         container.append(table, this.metaData, controls, this.pagination);
 
-        this.renderPage();
+        this.renderPage(this.dataset.page);
+    }
+
+    addHandlers(thead, controls, pagination) {
+        thead.addEventListener('click', async e => {
+            if (!e.target.hash) {
+                return;
+            }
+            e.preventDefault();
+            document.getElementsByClassName(this.dataset.order)[0].classList.remove(this.dataset.order);
+            let column = e.target.hash.split('-')[1];
+            if (this.dataset.sort !== column) {
+                this.dataset.sort = column;
+            } else {
+                this.dataset.order = this.dataset.order === 'desc' ? 'asc' : 'desc';
+            }
+            await this.renderPage(this.dataset.page);
+            e.target.classList.add(this.dataset.order);
+        });
+        controls.addEventListener('change', e => {
+            this.dataset.limit = e.target.value;
+            this.renderPage();
+        });
+        pagination.addEventListener('click', e => e.target.hash && this.renderPage(e.target.hash.split('-')[1]));
+    }
+
+    renderHeader(columns) {
+        if (!this.thead.innerHTML) {
+            this.columns = columns;
+            this.thead.innerHTML = `<tr>
+                ${columns.map(([key, label]) =>
+                    `<th><a class="${key === this.dataset.sort ? this.dataset.order : ''}" href="#sort-${key}">
+                        ${label || key.replace('_', ' ')}
+                    </a></th>`
+                )
+                .concat(this.options.customFields.map(({name}) => `<th><div>${name}</div></th>`))
+                .join('')}
+            </tr>`;
+        }
     }
 
     renderMeta(lower, pageSize, rowsCount) {
@@ -109,51 +129,34 @@ export default class TableVanilla {
             + `<li><a href="#page-${page === pagesCount ? 1 : page+1}">›</a></li>`;
     }
 
-    handlePagination(page) {
-        this.dataset.page = page;
-        this.renderPage();
-    }
-
-    handleSorting(column) {
-        if (this.dataset.sort !== column) {
-            this.dataset.sort = column;
-        } else {
-            this.dataset.order = this.dataset.order === 'desc' ? 'asc' : 'desc';
-        }
-        this.renderPage();
-    }
-
-    setPageSize(size) {
-        this.dataset.limit = size;
-        this.dataset.page = 1;
-        this.renderPage();
-    }
-
-    async renderPage() {
+    async renderPage(page = 1) {
         if (this.controller) {
             this.controller.abort();
         }
-        this.dataset.page = parseInt(this.dataset.page) || 1;
-        let offset = (this.dataset.page - 1) * this.dataset.limit;
+        this.dataset.page = +page || 1;
 
-        let data = await this.getData({...this.dataset, offset});
-        if (data) {
-            this.tbody.innerHTML = Object.values(data.rows).map(row =>
-                `<tr>
-                    ${Object.keys(this.headers).map(el =>
-                        `<td class="${row[el]}" title="${row[el]}">${row[el]}</td>`
-                    ).join('')}
-                    ${this.options.customFields.map(el =>
-                        `<td class="${el.name}">${el.callback(row)}</td>`
-                    ).join('')}
-                </tr>`
-            ).join('');
+        let offset = (page - 1) * this.dataset.limit,
+            data = await this.getData({...this.dataset, offset});
 
-            this.renderMeta(offset, +this.dataset.limit, +data.total);
-            this.renderPagination(+this.dataset.page, Math.ceil(data.total/this.dataset.limit));
-            if (this.options.deepLinking === "on") {
-                location.hash = Object.entries(this.dataset).map(el => el.join('=')).join('&');
-            }
+        if (!data || !data.rows) {
+            return this.tbody.innerHTML = 'Empty set';
+        }
+        this.renderHeader(Object.keys(data.rows[0]).map(name => [name]));
+        this.tbody.innerHTML = data.rows.map(row =>
+            `<tr>
+                ${this.columns.map(([col]) =>
+                    `<td class="${row[col]}" title="${row[col]}">${row[col]}</td>`
+                ).join('')}
+                ${this.options.customFields.map(col =>
+                    `<td class="${col.name}">${col.callback(row)}</td>`
+                ).join('')}
+            </tr>`
+        ).join('');
+
+        this.renderMeta(offset, +this.dataset.limit, +data.total);
+        this.renderPagination(this.dataset.page, Math.ceil(data.total/this.dataset.limit));
+        if (this.options.deepLinking === "on") {
+            location.hash = Object.entries(this.dataset).map(el => el.join('=')).join('&');
         }
     }
 
