@@ -13,6 +13,7 @@ export default class TableVanilla {
         }
 
         this.options = {
+            pagination: "client",   //client | server
             pageList: "[10,25,50,100]",
             pageSize: 10,
             deepLinking: "on",
@@ -24,6 +25,7 @@ export default class TableVanilla {
         };
 
         this.url = new URL(this.options.url, location.origin);
+
         this.dataset = {
             page: 1,
             sort: this.options.sortName,
@@ -68,34 +70,35 @@ export default class TableVanilla {
             ).join('')}
         </select> rows per page`;
 
-        this.addHandlers(this.thead, controls, this.pagination);
+        // handlers
+        controls.addEventListener('change', e =>
+            e.preventDefault() || this.updatePageSize(e.target.value)
+        );
+        this.thead.addEventListener('click', e =>
+            e.preventDefault() || e.target.hash && this.resort(e.target.hash.split('-')[1])
+        );
+        this.pagination.addEventListener('click', e =>
+            e.preventDefault() || e.target.hash && this.renderPage(e.target.hash.split('-')[1])
+        );
+
         table.append(this.thead, this.tbody);
         container.append(table, this.metaData, controls, this.pagination);
 
-        this.renderPage(this.dataset.page);
+        this.renderPage();
     }
 
-    addHandlers(thead, controls, pagination) {
-        thead.addEventListener('click', async e => {
-            if (!e.target.hash) {
-                return;
-            }
-            e.preventDefault();
-            document.getElementsByClassName(this.dataset.order)[0].classList.remove(this.dataset.order);
-            let column = e.target.hash.split('-')[1];
-            if (this.dataset.sort !== column) {
-                this.dataset.sort = column;
-            } else {
-                this.dataset.order = this.dataset.order === 'desc' ? 'asc' : 'desc';
-            }
-            await this.renderPage(this.dataset.page);
-            e.target.classList.add(this.dataset.order);
-        });
-        controls.addEventListener('change', e => {
-            this.dataset.limit = e.target.value;
-            this.renderPage();
-        });
-        pagination.addEventListener('click', e => e.target.hash && this.renderPage(e.target.hash.split('-')[1]));
+    updatePageSize(size) {
+        this.dataset.limit = size;
+        this.renderPage(1);
+    }
+
+    async resort(sort, order) {
+        this.thead.getElementsByClassName(this.dataset.order)[0].classList.remove(this.dataset.order);
+        order = order || this.dataset.order === 'desc' ? 'asc' : 'desc';
+        const update = this.dataset.sort !== sort ? {sort} : {order};
+        this.dataset = {...this.dataset, ...update};
+        await this.renderPage();
+        this.thead.getElementsByClassName(`header-${sort}`)[0].classList.add(this.dataset.order)
     }
 
     renderHeader(columns) {
@@ -103,7 +106,7 @@ export default class TableVanilla {
             this.columns = columns;
             this.thead.innerHTML = `<tr>
                 ${columns.map(([key, label]) =>
-                    `<th><a class="${key === this.dataset.sort ? this.dataset.order : ''}" href="#sort-${key}">
+                    `<th><a class="header-${key} ${key === this.dataset.sort ? this.dataset.order : ''}" href="#sort-${key}">
                         ${label || key.replace('_', ' ')}
                     </a></th>`
                 )
@@ -114,14 +117,14 @@ export default class TableVanilla {
     }
 
     renderMeta(lower, pageSize, rowsCount) {
-        let upper = lower + pageSize;
+        const upper = lower + pageSize;
         this.metaData.innerText = `Showing ${++lower} to ${upper > rowsCount ? rowsCount : upper} of ${rowsCount} rows`;
     }
 
     renderPagination(page = 1, pagesCount) {
         this.pagination.innerHTML =
             `<li><a href="#page-${page === 1 ? pagesCount : page-1}">‹</a></li>`
-            + getPages(page, pagesCount).map(item =>
+            + TableVanilla.getPages(page, pagesCount).map(item =>
                 item === '...'
                     ? `<li class="disabled"><a>...</a></li>`
                     : `<li class="${page === item ? 'active' : ''}"><a href="#page-${item}">${item}</a></li>`
@@ -129,20 +132,18 @@ export default class TableVanilla {
             + `<li><a href="#page-${page === pagesCount ? 1 : page+1}">›</a></li>`;
     }
 
-    async renderPage(page = 1) {
-        if (this.controller) {
-            this.controller.abort();
-        }
-        this.dataset.page = +page || 1;
+    async renderPage(page) {
+        this.dataset.page = +page || +this.dataset.page;
 
-        let offset = (page - 1) * this.dataset.limit,
-            data = await this.getData({...this.dataset, offset});
+        let offset = (this.dataset.page - 1) * this.dataset.limit,
+            rows = await this.getData({...this.dataset, offset});
 
-        if (!data || !data.rows) {
+        if (!rows || !rows.length) {
             return this.tbody.innerHTML = 'Empty set';
         }
-        this.renderHeader(Object.keys(data.rows[0]).map(name => [name]));
-        this.tbody.innerHTML = data.rows.map(row =>
+
+        this.renderHeader(Object.keys(rows[0]).map(name => [name]));
+        this.tbody.innerHTML = rows.map(row =>
             `<tr>
                 ${this.columns.map(([col]) =>
                     `<td class="${row[col]}" title="${row[col]}">${row[col]}</td>`
@@ -153,36 +154,46 @@ export default class TableVanilla {
             </tr>`
         ).join('');
 
-        this.renderMeta(offset, +this.dataset.limit, +data.total);
-        this.renderPagination(this.dataset.page, Math.ceil(data.total/this.dataset.limit));
+        this.renderMeta(offset, +this.dataset.limit, +this.data.total);
+        this.renderPagination(this.dataset.page, Math.ceil(this.data.total/this.dataset.limit));
         if (this.options.deepLinking === "on") {
             location.hash = Object.entries(this.dataset).map(el => el.join('=')).join('&');
         }
     }
 
-    async getData(params) {
-        Object.entries(params).map(el => this.url.searchParams.set(...el));
-        try {
-            this.controller = new AbortController();
-            let response = await fetch(this.url, {signal: this.controller.signal});
-            return await response.json();
-        } catch (e) {
-            console.log('Download aborted');
+    async getData(dataset) {
+        if (this.options.pagination !== "client" || !this.data) {
+            if (this.controller) {
+                this.controller.abort();
+            }
+            let params = this.options.pagination !== "client" ? dataset : {sort: dataset.sort, order: dataset.order};
+
+            Object.entries(params).map(el => this.url.searchParams.set(...el));
+            try {
+                this.controller = new AbortController();
+                let response = await fetch(this.url, {signal: this.controller.signal});
+                this.data = await response.json();
+            } catch (e) {
+                console.log('Download aborted');
+            }
         }
+        return this.options.pagination === "client"
+            ? this.data.rows.slice(dataset.offset, dataset.offset + +dataset.limit)
+            : this.data.rows;
+    }
+
+    static getPages(current, last, paginSize = 5) {
+        let list = Array.from(new Set(
+            [1, ...range(paginSize, current - Math.floor(paginSize/2)).filter(i => i>0 && i<=last), last]
+        ));
+        if (list[0]+1 !== list[1]) {
+            list.splice(1, 0, '...');
+        }
+        if (list[list.length-2]+1 !== list[list.length-1]) {
+            list.splice(-1, 0, '...');
+        }
+        return list;
     }
 }
 
 const range = (size, startAt = 0) => [...Array(size).keys()].map(i => i+startAt);
-
-function getPages(current, last, paginSize = 5) {
-    let list = Array.from(new Set(
-        [1, ...range(paginSize, current - Math.floor(paginSize/2)).filter(i => i>0 && i<=last), last]
-    ));
-    if (list[0]+1 !== list[1]) {
-        list.splice(1, 0, '...');
-    }
-    if (list[list.length-2]+1 !== list[list.length-1]) {
-        list.splice(-1, 0, '...');
-    }
-    return list;
-}
