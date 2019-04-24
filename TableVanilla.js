@@ -2,7 +2,7 @@
 
 export default class TableVanilla {
 
-    constructor(selector, options) {
+    constructor(selector, options, data) {
 
         let container = selector instanceof HTMLElement
             ? selector
@@ -13,7 +13,7 @@ export default class TableVanilla {
         }
 
         this.options = {
-            pagination: "client",   //client | server
+            pagination: "client",
             pageList: "[10,25,50,100]",
             pageSize: 10,
             deepLinking: "on",
@@ -23,6 +23,12 @@ export default class TableVanilla {
             ...container.dataset,
             ...options
         };
+
+        if (data) {
+            this.data = Object.values(data);
+            this.total = this.data.length;
+            this.options.pagination = 'client';
+        }
 
         this.url = new URL(this.options.url, location.origin);
 
@@ -52,12 +58,12 @@ export default class TableVanilla {
 
         this.thead = document.createElement('thead');
         this.tbody = document.createElement('tbody');
-        this.metaData = document.createElement('span');
+        this.meta = document.createElement('span');
         this.pagination = document.createElement('ul');
 
         table.classList.add('stripped');
         controls.classList.add('meta');
-        this.metaData.classList.add('meta');
+        this.meta.classList.add('meta');
         this.pagination.classList.add('pagination');
 
         if (this.options.columns) {
@@ -82,7 +88,7 @@ export default class TableVanilla {
         );
 
         table.append(this.thead, this.tbody);
-        container.append(table, this.metaData, controls, this.pagination);
+        container.append(table, this.meta, controls, this.pagination);
 
         this.renderPage();
     }
@@ -118,7 +124,7 @@ export default class TableVanilla {
 
     renderMeta(lower, pageSize, rowsCount) {
         const upper = lower + pageSize;
-        this.metaData.innerText = `Showing ${++lower} to ${upper > rowsCount ? rowsCount : upper} of ${rowsCount} rows`;
+        this.meta.innerText = `Showing ${++lower} to ${upper > rowsCount ? rowsCount : upper} of ${rowsCount} rows`;
     }
 
     renderPagination(page = 1, pagesCount) {
@@ -154,8 +160,8 @@ export default class TableVanilla {
             </tr>`
         ).join('');
 
-        this.renderMeta(offset, +this.dataset.limit, +this.data.total);
-        this.renderPagination(this.dataset.page, Math.ceil(this.data.total/this.dataset.limit));
+        this.renderMeta(offset, +this.dataset.limit, +this.total);
+        this.renderPagination(this.dataset.page, Math.ceil(this.total/this.dataset.limit));
         if (this.options.deepLinking === "on") {
             location.hash = Object.entries(this.dataset).map(el => el.join('=')).join('&');
         }
@@ -172,24 +178,32 @@ export default class TableVanilla {
             try {
                 this.controller = new AbortController();
                 let response = await fetch(this.url, {signal: this.controller.signal});
-                this.data = await response.json();
+                let {rows, total} = await response.json();
+                this.data = rows;
+                this.total = total;
             } catch (e) {
                 console.log('Download aborted');
             }
         }
-        return this.options.pagination === "client"
-            ? this.data.rows.slice(dataset.offset, dataset.offset + +dataset.limit)
-            : this.data.rows;
+        return this.options.pagination !== "client"
+            ? this.data
+            : this.data.sort((a, b) => {
+                return (dataset.order === 'asc' ? 1 : -1)
+                    *
+                    (isNaN(a[dataset.sort] - b[dataset.sort])
+                    ? a[dataset.sort] === b[dataset.sort] ? 0 : a[dataset.sort] > b[dataset.sort] ? 1 : -1
+                    : a[dataset.sort] - b[dataset.sort]);
+            }).slice(dataset.offset, dataset.offset + +dataset.limit);
     }
 
     static getPages(current, last, paginSize = 5) {
         let list = Array.from(new Set(
             [1, ...range(paginSize, current - Math.floor(paginSize/2)).filter(i => i>0 && i<=last), last]
         ));
-        if (list[0]+1 !== list[1]) {
+        if (list[1] && list[0]+1 !== list[1]) {
             list.splice(1, 0, '...');
         }
-        if (list[list.length-2]+1 !== list[list.length-1]) {
+        if (list[list.length-2] && list[list.length-2]+1 !== list[list.length-1]) {
             list.splice(-1, 0, '...');
         }
         return list;
