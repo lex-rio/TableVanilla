@@ -179,7 +179,7 @@ export default class TableVanilla {
                 this.controller = new AbortController();
                 let response = await fetch(this.url, {signal: this.controller.signal});
                 let {rows, total} = await response.json();
-                this.data = rows;
+                this.data = Object.values(rows);
                 this.total = total;
             } catch (e) {
                 console.log('Download aborted');
