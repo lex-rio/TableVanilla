@@ -11,8 +11,8 @@ Supports Ajax pajination and deeplinking
      data-page-size="10"
      data-page-list="[5, 10, 25, 100]"
      data-deep-linking="on"
-     data-sort-name="id"
-     data-sort-order="desc"></div>
+     data-sort-by="id"
+     data-order="desc"></div>
 ```
 
 ## header render
@@ -63,7 +63,7 @@ new TableVanilla(document.querySelector('#table-id'), {
         name: 'actions',
         callback: row => row.status === 'draft' ? `<a>aprove</a>` : `<a>draft</a>`
     }], 
-    sortName: 'col4'
+    sortBy: 'col4'
 });
 ```
 
