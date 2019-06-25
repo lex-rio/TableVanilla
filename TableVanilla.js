@@ -18,8 +18,8 @@ export default class TableVanilla {
             pageSize: 10,
             deepLinking: "on",
             url: "/",
-            sortOrder: "asc",
-            sortName: "id",
+            order: "asc",
+            sortBy: "id",
             ...container.dataset,
             ...options
         };
@@ -32,12 +32,8 @@ export default class TableVanilla {
 
         this.url = new URL(this.options.url, location.origin);
 
-        this.dataset = {
-            page: 1,
-            sort: this.options.sortName,
-            order: this.options.sortOrder,
-            limit: +this.options.pageSize
-        };
+        const {sortBy, order, pageSize} = this.options;
+        this.dataset = {page: 1, sortBy, order, pageSize};
 
         if (location.hash) {
             this.dataset = {
@@ -72,7 +68,7 @@ export default class TableVanilla {
 
         controls.innerHTML = `<select>
             ${JSON.parse(this.options.pageList).map(el =>
-                `<option ${el === +this.dataset.limit ? 'selected' : ''} value="${el}">${el}</option>`
+                `<option ${el === +this.dataset.pageSize ? 'selected' : ''} value="${el}">${el}</option>`
             ).join('')}
         </select> rows per page`;
 
@@ -94,17 +90,17 @@ export default class TableVanilla {
     }
 
     updatePageSize(size) {
-        this.dataset.limit = size;
+        this.dataset.pageSize = size;
         this.renderPage(1);
     }
 
-    async resort(sort, order) {
+    async resort(sortBy, order) {
         this.thead.getElementsByClassName(this.dataset.order)[0].classList.remove(this.dataset.order);
         order = order || this.dataset.order === 'desc' ? 'asc' : 'desc';
-        const update = this.dataset.sort !== sort ? {sort} : {order};
+        const update = this.dataset.sortBy !== sortBy ? {sortBy} : {order};
         this.dataset = {...this.dataset, ...update};
         await this.renderPage();
-        this.thead.getElementsByClassName(`header-${sort}`)[0].classList.add(this.dataset.order)
+        this.thead.getElementsByClassName(`header-${sortBy}`)[0].classList.add(this.dataset.order)
     }
 
     renderHeader(columns) {
@@ -112,7 +108,7 @@ export default class TableVanilla {
             this.columns = columns;
             this.thead.innerHTML = `<tr>
                 ${columns.map(([key, label]) =>
-                    `<th><a class="header-${key} ${key === this.dataset.sort ? this.dataset.order : ''}" href="#sort-${key}">
+                    `<th><a class="header-${key} ${key === this.dataset.sortBy ? this.dataset.order : ''}" href="#sort-${key}">
                         ${label || key.replace('_', ' ')}
                     </a></th>`
                 )
@@ -141,7 +137,7 @@ export default class TableVanilla {
     async renderPage(page) {
         this.dataset.page = +page || +this.dataset.page;
 
-        let offset = (this.dataset.page - 1) * this.dataset.limit,
+        let offset = (this.dataset.page - 1) * this.dataset.pageSize,
             rows = await this.getData({...this.dataset, offset});
 
         if (!rows || !rows.length) {
@@ -151,17 +147,13 @@ export default class TableVanilla {
         this.renderHeader(Object.keys(rows[0]).map(name => [name]));
         this.tbody.innerHTML = rows.map(row =>
             `<tr>
-                ${this.columns.map(([col]) =>
-                    `<td class="${row[col]}" title="${row[col]}">${row[col]}</td>`
-                ).join('')}
-                ${this.options.customFields.map(col =>
-                    `<td class="${col.name}">${col.callback(row)}</td>`
-                ).join('')}
+                ${this.columns.map(([col]) => `<td class="${row[col]}" title="${row[col]}">${row[col]}</td>`).join('')}
+                ${this.options.customFields.map(col => `<td class="${col.name}">${col.callback(row)}</td>`).join('')}
             </tr>`
         ).join('');
 
-        this.renderMeta(offset, +this.dataset.limit, +this.total);
-        this.renderPagination(this.dataset.page, Math.ceil(this.total/this.dataset.limit));
+        this.renderMeta(offset, +this.dataset.pageSize, +this.total);
+        this.renderPagination(this.dataset.page, Math.ceil(this.total/this.dataset.pageSize));
         if (this.options.deepLinking === "on") {
             location.hash = Object.entries(this.dataset).map(el => el.join('=')).join('&');
         }
@@ -172,7 +164,7 @@ export default class TableVanilla {
             if (this.controller) {
                 this.controller.abort();
             }
-            let params = this.options.pagination !== "client" ? dataset : {sort: dataset.sort, order: dataset.order};
+            let params = this.options.pagination !== "client" ? dataset : {sort: dataset.sortBy, order: dataset.order};
 
             Object.entries(params).map(el => this.url.searchParams.set(...el));
             try {
@@ -190,10 +182,10 @@ export default class TableVanilla {
             : this.data.sort((a, b) => {
                 return (dataset.order === 'asc' ? 1 : -1)
                     *
-                    (isNaN(a[dataset.sort] - b[dataset.sort])
-                    ? a[dataset.sort] === b[dataset.sort] ? 0 : a[dataset.sort] > b[dataset.sort] ? 1 : -1
-                    : a[dataset.sort] - b[dataset.sort]);
-            }).slice(dataset.offset, dataset.offset + +dataset.limit);
+                    (isNaN(a[dataset.sortBy] - b[dataset.sortBy])
+                    ? a[dataset.sortBy] === b[dataset.sortBy] ? 0 : a[dataset.sortBy] > b[dataset.sortBy] ? 1 : -1
+                    : a[dataset.sortBy] - b[dataset.sortBy]);
+            }).slice(dataset.offset, dataset.offset + +dataset.pageSize);
     }
 
     static getPages(current, last, paginSize = 5) {
