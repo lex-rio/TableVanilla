@@ -1,0 +1,23 @@
+{
+  "name": "tablevanilla",
+  "version": "1.0.0",
+  "description": "front-end js library for rendering data as a table without dependencies",
+  "main": "TableVanilla.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lex-rio/TableVanilla.git"
+  },
+  "keywords": [
+    "vanilla",
+    "table"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lex-rio/TableVanilla/issues"
+  },
+  "homepage": "https://github.com/lex-rio/TableVanilla#readme"
+}
