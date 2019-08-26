@@ -53,7 +53,7 @@ import TableVanilla from './TableVanilla.js';
 new TableVanilla(document.querySelector('#table-id'));
 ```
 
-## You can redefine data propertoes in options object
+## You can redefine data properties in options object
 
 ```JS
 import TableVanilla from './TableVanilla.js';
