@@ -20,6 +20,7 @@ export default class TableVanilla {
             url: "/",
             order: "asc",
             sortBy: "id",
+            customFields: [],
             ...container.dataset,
             ...options
         };
